@@ -885,7 +885,7 @@ function playMuteStateSound(config: Config, muted: boolean) {
     const frequency = startFrequency + (endFrequency - startFrequency) * progress;
     const envelope = Math.min(progress / 0.08, (1 - progress) / 0.25, 1);
     phase += (2 * Math.PI * frequency) / sampleRate;
-    pcm.writeInt16LE(Math.round(Math.sin(phase) * envelope * 0.75 * 32767), sample * 2);
+    pcm.writeInt16LE(Math.round(Math.sin(phase) * envelope * 32767), sample * 2);
   }
 
   const player = spawn(config.soundPlayer, [
