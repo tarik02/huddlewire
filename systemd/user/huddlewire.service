@@ -1,0 +1,15 @@
+[Unit]
+Description=Huddlewire Slack Huddles control plane
+After=graphical-session.target network-online.target
+Wants=network-online.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.config/huddlewire/env
+ExecStart=huddlewire daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,22 @@
+{
+  "name": "huddlewire",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "huddlewire": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node src/main.ts daemon",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "mqtt": "^5.14.1",
+    "puppeteer-core": "^24.43.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.0",
+    "typescript": "^5.9.3"
+  }
+}
