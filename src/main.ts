@@ -1,6 +1,7 @@
 import * as dbus from 'dbus-next';
 import type { ClientInterface } from 'dbus-next';
 import mqtt, { type MqttClient } from 'mqtt';
+import { spawn } from 'node:child_process';
 import puppeteer, { type Browser, type Page } from 'puppeteer-core';
 import { inspect } from 'node:util';
 
@@ -18,6 +19,9 @@ type Config = {
   pollIntervalMs: number;
   deviceId: string;
   deviceName: string;
+  soundPlayer: string | undefined;
+  mutedSound: string | undefined;
+  unmutedSound: string | undefined;
 };
 
 type PageStatus = {
@@ -87,6 +91,9 @@ function readConfig(): Config {
     pollIntervalMs,
     deviceId: process.env.HA_DEVICE_ID ?? 'huddlewire',
     deviceName: process.env.HA_DEVICE_NAME ?? 'Slack huddle',
+    soundPlayer: process.env.HUDDLEWIRE_SOUND_PLAYER || undefined,
+    mutedSound: process.env.HUDDLEWIRE_MUTED_SOUND || undefined,
+    unmutedSound: process.env.HUDDLEWIRE_UNMUTED_SOUND || undefined,
   };
 }
 
@@ -826,6 +833,21 @@ async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function playMuteStateSound(config: Config, muted: boolean) {
+  const sound = muted ? config.mutedSound : config.unmutedSound;
+  if (!config.soundPlayer || !sound) {
+    return;
+  }
+
+  const player = spawn(config.soundPlayer, [sound], {
+    stdio: 'ignore',
+  });
+  player.on('error', (error) => {
+    console.error(`failed to play ${muted ? 'muted' : 'unmuted'} sound:`, formatError(error));
+  });
+  player.unref();
+}
+
 async function registerGlobalMuteShortcut(toggle: () => Promise<void>) {
   type GlobalAccelInterface = ClientInterface & {
     doRegister(actionId: string[]): Promise<void>;
@@ -889,6 +911,7 @@ export async function runDaemon() {
   const topics = createTopics(config);
   const client = createMqttClient(config, topics);
   let lastStatusKey: string | null = null;
+  let lastMutedState: boolean | null = null;
   const screenSharePatchStatuses = new Map<string, string>();
   let browser: Browser | null = null;
 
@@ -978,6 +1001,15 @@ export async function runDaemon() {
       }
 
       const status = await readSlackStatus(slackBrowser);
+      if (status.inHuddle && status.huddleState !== 'unknown') {
+        if (lastMutedState !== null && lastMutedState !== status.muted) {
+          playMuteStateSound(config, status.muted);
+        }
+        lastMutedState = status.muted;
+      } else if (!status.inHuddle) {
+        lastMutedState = null;
+      }
+
       const key = stableStatusKey(status);
       if (key !== lastStatusKey) {
         publishSlackStatus(client, topics, status);
