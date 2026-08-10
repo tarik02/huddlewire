@@ -20,8 +20,6 @@ type Config = {
   deviceId: string;
   deviceName: string;
   soundPlayer: string | undefined;
-  mutedSound: string | undefined;
-  unmutedSound: string | undefined;
 };
 
 type PageStatus = {
@@ -92,8 +90,6 @@ function readConfig(): Config {
     deviceId: process.env.HA_DEVICE_ID ?? 'huddlewire',
     deviceName: process.env.HA_DEVICE_NAME ?? 'Slack huddle',
     soundPlayer: process.env.HUDDLEWIRE_SOUND_PLAYER || undefined,
-    mutedSound: process.env.HUDDLEWIRE_MUTED_SOUND || undefined,
-    unmutedSound: process.env.HUDDLEWIRE_UNMUTED_SOUND || undefined,
   };
 }
 
@@ -594,6 +590,44 @@ async function getSlackPages(browser: Browser) {
   );
 }
 
+const muteStateObserverScript = `(() => {
+  if (globalThis.__huddlewireMuteStateObserver) {
+    return;
+  }
+
+  let lastMuted = null;
+  const readMuted = () => {
+    const button = document.querySelector('button[data-qa="segmented-mute-button-main"]');
+    const label = (button?.getAttribute('aria-label') || button?.getAttribute('title') || '').toLowerCase();
+    if (label.includes('unmute')) {
+      return true;
+    }
+    if (label.includes('mute')) {
+      return false;
+    }
+    return null;
+  };
+  const report = () => {
+    const muted = readMuted();
+    if (muted === null || muted === lastMuted) {
+      return;
+    }
+    lastMuted = muted;
+    Promise.resolve(globalThis.__huddlewireReportMuteState(muted)).catch(() => undefined);
+  };
+
+  const observer = new MutationObserver(report);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['aria-label', 'title', 'data-qa'],
+    characterData: true,
+    childList: true,
+    subtree: true,
+  });
+  globalThis.__huddlewireMuteStateObserver = observer;
+  report();
+})()`;
+
 export async function readSlackStatus(browser: Browser): Promise<SlackStatus> {
   const pages = await getSlackPages(browser);
   if (pages.length === 0) {
@@ -834,17 +868,54 @@ async function sleep(ms: number) {
 }
 
 function playMuteStateSound(config: Config, muted: boolean) {
-  const sound = muted ? config.mutedSound : config.unmutedSound;
-  if (!config.soundPlayer || !sound) {
+  if (!config.soundPlayer) {
     return;
   }
 
-  const player = spawn(config.soundPlayer, [sound], {
-    stdio: 'ignore',
+  const sampleRate = 48000;
+  const durationSeconds = 0.11;
+  const sampleCount = Math.round(sampleRate * durationSeconds);
+  const pcm = Buffer.alloc(sampleCount * 2);
+  const startFrequency = muted ? 620 : 380;
+  const endFrequency = muted ? 380 : 620;
+  let phase = 0;
+
+  for (let sample = 0; sample < sampleCount; sample += 1) {
+    const progress = sample / sampleCount;
+    const frequency = startFrequency + (endFrequency - startFrequency) * progress;
+    const envelope = Math.min(progress / 0.08, (1 - progress) / 0.25, 1);
+    phase += (2 * Math.PI * frequency) / sampleRate;
+    pcm.writeInt16LE(Math.round(Math.sin(phase) * envelope * 0.18 * 32767), sample * 2);
+  }
+
+  const player = spawn(config.soundPlayer, [
+    '--raw',
+    '--format',
+    's16',
+    '--rate',
+    String(sampleRate),
+    '--channels',
+    '1',
+    '--latency',
+    '20ms',
+    '--media-role',
+    'Notification',
+    '-',
+  ], {
+    stdio: ['pipe', 'ignore', 'ignore'],
   });
   player.on('error', (error) => {
     console.error(`failed to play ${muted ? 'muted' : 'unmuted'} sound:`, formatError(error));
   });
+  player.on('exit', (code) => {
+    if (code !== 0) {
+      console.error(`${muted ? 'muted' : 'unmuted'} sound player exited with code ${code}`);
+    }
+  });
+  player.stdin.on('error', (error) => {
+    console.error(`failed to send ${muted ? 'muted' : 'unmuted'} sound:`, formatError(error));
+  });
+  player.stdin.end(pcm);
   player.unref();
 }
 
@@ -912,8 +983,37 @@ export async function runDaemon() {
   const client = createMqttClient(config, topics);
   let lastStatusKey: string | null = null;
   let lastMutedState: boolean | null = null;
+  const muteStateObservedPages = new WeakSet<Page>();
   const screenSharePatchStatuses = new Map<string, string>();
   let browser: Browser | null = null;
+
+  function updateMutedState(muted: boolean) {
+    if (lastMutedState !== null && lastMutedState !== muted) {
+      playMuteStateSound(config, muted);
+    }
+    lastMutedState = muted;
+  }
+
+  async function installMuteStateObservers(slackBrowser: Browser) {
+    const pages = await getSlackPages(slackBrowser);
+    await Promise.all(pages.map(async (page) => {
+      try {
+        if (!muteStateObservedPages.has(page)) {
+          await page.exposeFunction('__huddlewireReportMuteState', (muted: unknown) => {
+            if (typeof muted === 'boolean') {
+              updateMutedState(muted);
+            }
+          });
+          muteStateObservedPages.add(page);
+        }
+        await page.evaluate(muteStateObserverScript);
+      } catch (error) {
+        if (!page.isClosed()) {
+          console.error('failed to install Slack mute observer:', formatError(error));
+        }
+      }
+    }));
+  }
 
   async function getBrowser() {
     if (!browser) {
@@ -990,6 +1090,7 @@ export async function runDaemon() {
   while (true) {
     try {
       const slackBrowser = await getBrowser();
+      await installMuteStateObservers(slackBrowser);
       if (config.patchNativeScreenShare) {
         const patchResults = await patchNativeScreenShare(slackBrowser);
         for (const result of patchResults) {
@@ -1002,10 +1103,7 @@ export async function runDaemon() {
 
       const status = await readSlackStatus(slackBrowser);
       if (status.inHuddle && status.huddleState !== 'unknown') {
-        if (lastMutedState !== null && lastMutedState !== status.muted) {
-          playMuteStateSound(config, status.muted);
-        }
-        lastMutedState = status.muted;
+        updateMutedState(status.muted);
       } else if (!status.inHuddle) {
         lastMutedState = null;
       }
