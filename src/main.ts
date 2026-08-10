@@ -873,7 +873,7 @@ function playMuteStateSound(config: Config, muted: boolean) {
   }
 
   const sampleRate = 48000;
-  const durationSeconds = 0.11;
+  const durationSeconds = 0.16;
   const sampleCount = Math.round(sampleRate * durationSeconds);
   const pcm = Buffer.alloc(sampleCount * 2);
   const startFrequency = muted ? 620 : 380;
@@ -885,7 +885,7 @@ function playMuteStateSound(config: Config, muted: boolean) {
     const frequency = startFrequency + (endFrequency - startFrequency) * progress;
     const envelope = Math.min(progress / 0.08, (1 - progress) / 0.25, 1);
     phase += (2 * Math.PI * frequency) / sampleRate;
-    pcm.writeInt16LE(Math.round(Math.sin(phase) * envelope * 0.18 * 32767), sample * 2);
+    pcm.writeInt16LE(Math.round(Math.sin(phase) * envelope * 0.32 * 32767), sample * 2);
   }
 
   const player = spawn(config.soundPlayer, [
@@ -898,8 +898,6 @@ function playMuteStateSound(config: Config, muted: boolean) {
     '1',
     '--latency',
     '20ms',
-    '--media-role',
-    'Notification',
     '-',
   ], {
     stdio: ['pipe', 'ignore', 'ignore'],
