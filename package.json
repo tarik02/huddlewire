@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "dbus-next": "^0.10.2",
     "mqtt": "^5.14.1",
     "puppeteer-core": "^24.43.0"
   },
