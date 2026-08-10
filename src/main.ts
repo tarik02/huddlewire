@@ -493,7 +493,7 @@ async function patchNativeScreenShare(browser: Browser) {
   const slackPages: Array<{ page: Page; diagnosticUrl: string }> = [];
   for (const [pageIndex, page] of pages.entries()) {
     if (page.url().startsWith('https://app.slack.com/client/')) {
-      slackPages.push({ page, diagnosticUrl: page.url() });
+      slackPages.push({ page, diagnosticUrl: `${page.url()} [page ${pageIndex}]` });
     } else if (page.url() === 'about:blank') {
       slackPages.push({ page, diagnosticUrl: `about:blank [page ${pageIndex}]` });
     }
