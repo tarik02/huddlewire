@@ -15,14 +15,22 @@ in
 stdenv.mkDerivation (finalAttrs: {
   pname = "huddlewire";
   version = (builtins.fromJSON (builtins.readFile ./package.json)).version;
-  src = ./.;
+  src = lib.fileset.toSource {
+    root = ./.;
+    fileset = lib.fileset.unions [
+      ./package.json
+      ./pnpm-lock.yaml
+      ./src
+      ./tsconfig.json
+    ];
+  };
   strictDeps = true;
 
   pnpmDeps = fetchPnpmDeps {
     inherit (finalAttrs) pname version src;
     inherit pnpm;
     fetcherVersion = 4;
-    hash = "sha256-xsPth/4cE15wXd9sJUyKaURES+Fz+1YXh9Otxw7OAoU=";
+    hash = "sha256-vbU+qpLne/MW41lpZokZrWT2WeGQE6PsBr+xe0EhniA=";
   };
 
   nativeBuildInputs = [
@@ -32,11 +40,7 @@ stdenv.mkDerivation (finalAttrs: {
     pnpmConfigHook
   ];
 
-  buildPhase = ''
-    runHook preBuild
-    pnpm build
-    runHook postBuild
-  '';
+  dontBuild = true;
 
   installPhase = ''
     runHook preInstall
@@ -44,12 +48,12 @@ stdenv.mkDerivation (finalAttrs: {
     app="$out/libexec/huddlewire"
     mkdir -p "$app" "$out/bin"
     cp package.json pnpm-lock.yaml "$app"
-    cp -r dist "$app"
+    cp -r src "$app"
     pnpm --dir "$app" install --prod --offline --frozen-lockfile
     rm "$app/pnpm-lock.yaml"
 
     makeWrapper ${lib.getExe nodejs} "$out/bin/huddlewire" \
-      --add-flags "$app/dist/cli.js"
+      --add-flags "$app/src/cli.ts"
 
     runHook postInstall
   '';

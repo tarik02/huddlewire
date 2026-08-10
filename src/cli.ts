@@ -1,5 +1,11 @@
+#!/usr/bin/env node
+
 import type { Browser } from 'puppeteer-core';
-import { connectSlack, readSlackStatus, runDaemon, setSlackMuted } from './main.js';
+
+import runDaemon from './daemon.ts';
+import { connectSlack } from './slack/client.ts';
+import { setSlackMuted } from './slack/mute.ts';
+import { readSlackStatus } from './slack/status.ts';
 
 function printUsage() {
   console.log(`Usage:
@@ -13,7 +19,7 @@ Environment:
 }
 
 async function runOneShot<T>(command: (browser: Browser) => Promise<T>): Promise<T> {
-  const browser = await connectSlack(process.env.SLACK_CDP_URL ?? 'http://127.0.0.1:9224');
+  const browser = await connectSlack(process.env['SLACK_CDP_URL'] ?? 'http://127.0.0.1:9224');
   try {
     return await command(browser);
   } finally {
@@ -32,7 +38,10 @@ async function runCli(args: string[]) {
     if (mode !== 'toggle' && mode !== 'on' && mode !== 'off') {
       throw new Error(`unknown mute mode: ${mode}`);
     }
-    const target = mode === 'toggle' ? 'toggle' : mode === 'on';
+    let target: boolean | 'toggle' = mode === 'on';
+    if (mode === 'toggle') {
+      target = 'toggle';
+    }
     const result = await runOneShot((browser) => setSlackMuted(browser, target));
     console.log(result);
     if (result !== 'changed' && result !== 'already_set') {
@@ -49,14 +58,20 @@ async function runCli(args: string[]) {
     }
     return;
   }
-  if (!command || command === 'help' || command === '--help' || command === '-h') {
+  if (command === undefined || command === 'help' || command === '--help' || command === '-h') {
     printUsage();
     return;
   }
   throw new Error(`unknown command: ${command}`);
 }
 
-runCli(process.argv.slice(2)).catch((error) => {
-  console.error(error instanceof Error ? error.message : String(error));
+try {
+  await runCli(process.argv.slice(2));
+} catch (error) {
+  let message = String(error);
+  if (error instanceof Error) {
+    message = error.message;
+  }
+  console.error(message);
   process.exit(1);
-});
+}
