@@ -4,11 +4,11 @@
   "type": "module",
   "private": true,
   "bin": {
-    "huddlewire": "dist/main.js"
+    "huddlewire": "dist/cli.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "start": "node src/main.ts daemon",
+    "start": "node src/cli.ts daemon",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

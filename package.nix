@@ -49,7 +49,7 @@ stdenv.mkDerivation (finalAttrs: {
     rm "$app/pnpm-lock.yaml"
 
     makeWrapper ${lib.getExe nodejs} "$out/bin/huddlewire" \
-      --add-flags "$app/dist/main.js"
+      --add-flags "$app/dist/cli.js"
 
     runHook postInstall
   '';
