@@ -1,6 +1,12 @@
 const appName = 'huddlewire';
 const appVersion = '0.1.0';
 
+type SoundConfig = {
+  mutedPath: string;
+  player: string;
+  unmutedPath: string;
+};
+
 type Config = {
   slackCdpUrl: string;
   patchNativeScreenShare: boolean;
@@ -12,7 +18,7 @@ type Config = {
   pollIntervalMs: number;
   deviceId: string;
   deviceName: string;
-  soundPlayer: string | undefined;
+  sound: SoundConfig | undefined;
 };
 
 function readConfig(): Config {
@@ -26,6 +32,31 @@ function readConfig(): Config {
     throw new Error('POLL_INTERVAL_MS must be at least 250');
   }
 
+  const soundPlayer = process.env['HUDDLEWIRE_SOUND_PLAYER'];
+  const mutedSoundPath = process.env['HUDDLEWIRE_MUTED_SOUND'];
+  const unmutedSoundPath = process.env['HUDDLEWIRE_UNMUTED_SOUND'];
+  let sound: SoundConfig | undefined;
+  if (soundPlayer === undefined || soundPlayer === '') {
+    if (
+      (mutedSoundPath !== undefined && mutedSoundPath !== '') ||
+      (unmutedSoundPath !== undefined && unmutedSoundPath !== '')
+    ) {
+      throw new Error('HUDDLEWIRE_SOUND_PLAYER is required when mute state sounds are configured');
+    }
+  } else {
+    if (mutedSoundPath === undefined || mutedSoundPath === '') {
+      throw new Error('HUDDLEWIRE_MUTED_SOUND is required when HUDDLEWIRE_SOUND_PLAYER is set');
+    }
+    if (unmutedSoundPath === undefined || unmutedSoundPath === '') {
+      throw new Error('HUDDLEWIRE_UNMUTED_SOUND is required when HUDDLEWIRE_SOUND_PLAYER is set');
+    }
+    sound = {
+      mutedPath: mutedSoundPath,
+      player: soundPlayer,
+      unmutedPath: unmutedSoundPath,
+    };
+  }
+
   return {
     deviceId: process.env['HA_DEVICE_ID'] ?? 'huddlewire',
     deviceName: process.env['HA_DEVICE_NAME'] ?? 'Slack huddle',
@@ -37,7 +68,7 @@ function readConfig(): Config {
     patchNativeScreenShare: process.env['PATCH_NATIVE_SCREEN_SHARE'] !== 'false',
     pollIntervalMs,
     slackCdpUrl: process.env['SLACK_CDP_URL'] ?? 'http://127.0.0.1:9224',
-    soundPlayer: process.env['HUDDLEWIRE_SOUND_PLAYER'],
+    sound,
   };
 }
 

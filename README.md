@@ -46,6 +46,8 @@ The daemon also reads the following environment variables:
 - `PATCH_NATIVE_SCREEN_SHARE` (defaults to `true`)
 - `POLL_INTERVAL_MS` (defaults to `1000`)
 - `HUDDLEWIRE_SOUND_PLAYER` (optional `pw-play`-compatible executable)
+- `HUDDLEWIRE_MUTED_SOUND`, `HUDDLEWIRE_UNMUTED_SOUND` (required sound file paths
+  when `HUDDLEWIRE_SOUND_PLAYER` is set)
 
 To run the included user service, copy its environment and unit files:
 
