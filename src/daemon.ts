@@ -23,6 +23,7 @@ export default async function runDaemon() {
   const slackConnection: { browser: Browser | null } = { browser: null };
   const observedMutePages = new WeakSet<Page>();
   const screenSharePatchStatuses = new Map<string, string>();
+  let lastStatus: SlackStatus | null = null;
   let lastStatusKey: string | null = null;
   let lastMutedState: boolean | null = null;
 
@@ -61,6 +62,9 @@ export default async function runDaemon() {
   client.on('connect', () => {
     console.log('mqtt connected');
     publishDiscovery(client, config, topics);
+    if (lastStatus !== null) {
+      publishSlackStatus(client, topics, lastStatus);
+    }
     client.subscribe(`${config.haDiscoveryPrefix}/status`);
     client.subscribe(topics.muteSet);
     client.subscribe(topics.stickerSet);
@@ -140,6 +144,7 @@ export default async function runDaemon() {
 
       const key = stableStatusKey(status);
       if (key !== lastStatusKey) {
+        lastStatus = status;
         publishSlackStatus(client, topics, status);
         lastStatusKey = key;
         console.log(`slack huddle state: ${status.huddleState}`);
@@ -152,6 +157,7 @@ export default async function runDaemon() {
       const status = offlineStatus();
       const key = stableStatusKey(status);
       if (key !== lastStatusKey) {
+        lastStatus = status;
         publishSlackStatus(client, topics, status);
         lastStatusKey = key;
       }
