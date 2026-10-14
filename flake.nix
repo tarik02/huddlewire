@@ -33,6 +33,15 @@
         };
       });
 
+      homeManagerModules.default =
+        { lib, pkgs, ... }:
+        {
+          imports = [ ./nix/home-manager.nix ];
+          config.services.huddlewire.package =
+            lib.mkDefault
+              self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+        };
+
       formatter = forAllSystems (pkgs: pkgs.nixfmt);
     };
 }

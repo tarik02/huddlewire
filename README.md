@@ -65,6 +65,32 @@ It reads the following environment variables:
 - `HUDDLEWIRE_MUTED_SOUND`, `HUDDLEWIRE_UNMUTED_SOUND` (optional MP3 files
   played when the microphone is muted or unmuted; set both or neither)
 
+## Home Manager
+
+The flake exports a Home Manager module that runs the daemon as a systemd user
+service on Linux and a launchd agent on macOS:
+
+```nix
+{
+  imports = [ inputs.huddlewire.homeManagerModules.default ];
+
+  services.huddlewire = {
+    enable = true;
+    environment.MQTT_URL = "mqtt://homeassistant.local:1883";
+    # KEY=value lines, read at start; quote values that contain spaces.
+    environmentFile = "/run/secrets/huddlewire.env";
+    sounds = {
+      muted = ./muted.mp3;
+      unmuted = ./unmuted.mp3;
+    };
+  };
+}
+```
+
+The module does not start Slack; launch it with the DevTools flags above.
+
+## Without Nix
+
 To run the included systemd user service on Linux, copy its environment and
 unit files:
 
