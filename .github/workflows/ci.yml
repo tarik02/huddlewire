@@ -17,20 +17,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@313600b80b104eadebb9111787d37a2e83e014ca # v1.17.0
-        with:
-          cache: true
-          node-version: '24'
+      - name: Install Nix
+        uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
 
-      - name: Check formatting and lint
-        run: vp check
+      - name: Check formatting
+        run: test -z "$(nix develop --command gofmt -l .)"
 
-      - name: Check types
-        run: vp run typecheck
-
-      - name: Check native TypeScript entrypoint
-        run: node src/cli.ts --help
+      - name: Vet
+        run: nix develop --command go vet ./...
 
   nix:
     name: nix package
