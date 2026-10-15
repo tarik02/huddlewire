@@ -3,9 +3,9 @@ package slack
 import (
 	"context"
 	_ "embed"
-	"log"
 
-	"github.com/mafredri/cdp/protocol/runtime"
+	"github.com/chromedp/chromedp"
+	"go.uber.org/zap"
 )
 
 // MuteMode is the requested microphone state.
@@ -59,7 +59,7 @@ var muteObserverScript string
 
 // ObserveMuteState installs a mutation observer in every Slack page that calls
 // onMuteState as soon as the mute button changes, without waiting for a poll.
-// onMuteState runs on a page's event goroutine.
+// onMuteState runs on its own goroutine for each change.
 func ObserveMuteState(ctx context.Context, browser *Browser, onMuteState func(muted bool)) error {
 	pages, err := browser.Pages(ctx)
 	if err != nil {
@@ -68,7 +68,7 @@ func ObserveMuteState(ctx context.Context, browser *Browser, onMuteState func(mu
 
 	for _, page := range pages {
 		if err := page.observeMuteState(ctx, onMuteState); err != nil && !page.Closed() {
-			log.Printf("install Slack mute observer on %s: %v", page.URL, err)
+			browser.log.Warn("install Slack mute observer", zap.String("url", page.URL), zap.Error(err))
 		}
 	}
 	return nil
@@ -76,36 +76,13 @@ func ObserveMuteState(ctx context.Context, browser *Browser, onMuteState func(mu
 
 func (p *Page) observeMuteState(ctx context.Context, onMuteState func(muted bool)) error {
 	if !p.muteObserving {
-		if err := p.client.Runtime.Enable(ctx); err != nil {
+		report := func(_ context.Context, muted bool) (chromedp.Void, error) {
+			onMuteState(muted)
+			return chromedp.Void{}, nil
+		}
+		if _, err := run(ctx, p, chromedp.ExposeFunc(muteBinding, report)); err != nil {
 			return err
 		}
-		if err := p.client.Runtime.AddBinding(ctx, runtime.NewAddBindingArgs(muteBinding)); err != nil {
-			return err
-		}
-		// The stream lives as long as the page connection.
-		calls, err := p.client.Runtime.BindingCalled(p.conn.Context())
-		if err != nil {
-			return err
-		}
-		go func() {
-			defer calls.Close()
-			for {
-				call, err := calls.Recv()
-				if err != nil {
-					return
-				}
-				if call.Name != muteBinding {
-					continue
-				}
-				switch call.Payload {
-				case "true":
-					onMuteState(true)
-				case "false":
-					onMuteState(false)
-				}
-			}
-		}()
-
 		p.muteObserving = true
 	}
 

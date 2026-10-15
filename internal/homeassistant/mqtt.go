@@ -5,13 +5,13 @@ package homeassistant
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"maps"
 	"os"
 	"sync"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
+	"go.uber.org/zap"
 
 	"github.com/tarik02/huddlewire/internal/config"
 	"github.com/tarik02/huddlewire/internal/slack"
@@ -36,6 +36,7 @@ type topics struct {
 
 // Client keeps the broker updated with the latest Slack status.
 type Client struct {
+	log    *zap.Logger
 	cfg    config.Config
 	topics topics
 	client paho.Client
@@ -46,9 +47,10 @@ type Client struct {
 
 // Connect starts connecting to the broker in the background and keeps
 // reconnecting until Close.
-func Connect(cfg config.Config, handlers Handlers) *Client {
+func Connect(log *zap.Logger, cfg config.Config, handlers Handlers) *Client {
 	base := cfg.MQTTBaseTopic
 	c := &Client{
+		log: log,
 		cfg: cfg,
 		topics: topics{
 			attributes:   base + "/attributes",
@@ -75,14 +77,14 @@ func Connect(cfg config.Config, handlers Handlers) *Client {
 		// Command handlers may wait on Slack; keep them off the router goroutine.
 		SetOrderMatters(false).
 		SetOnConnectHandler(func(client paho.Client) {
-			log.Print("mqtt connected")
+			log.Info("mqtt connected")
 			c.onConnect(client, handlers)
 		}).
 		SetConnectionLostHandler(func(_ paho.Client, err error) {
-			log.Printf("mqtt connection lost: %v", err)
+			log.Warn("mqtt connection lost", zap.Error(err))
 		}).
 		SetReconnectingHandler(func(paho.Client, *paho.ClientOptions) {
-			log.Print("mqtt reconnecting")
+			log.Info("mqtt reconnecting")
 		})
 
 	c.client = paho.NewClient(options)
@@ -121,7 +123,7 @@ func (c *Client) onConnect(client paho.Client, handlers Handlers) {
 			case "OFF":
 				handlers.OnMute(false)
 			default:
-				log.Printf("unknown mute command: %s", command)
+				c.log.Warn("unknown mute command", zap.String("command", command))
 			}
 		},
 		c.topics.stickerSet: func(_ paho.Client, message paho.Message) {
@@ -132,7 +134,7 @@ func (c *Client) onConnect(client paho.Client, handlers Handlers) {
 		token := client.Subscribe(topic, 0, handler)
 		go func() {
 			if token.Wait(); token.Error() != nil {
-				log.Printf("mqtt subscribe to %s failed: %v", topic, token.Error())
+				c.log.Warn("mqtt subscribe failed", zap.String("topic", topic), zap.Error(token.Error()))
 			}
 		}()
 	}
@@ -146,7 +148,7 @@ func (c *Client) publish(topic string, payload any) {
 	default:
 		encoded, err := json.Marshal(value)
 		if err != nil {
-			log.Printf("encode mqtt payload for %s: %v", topic, err)
+			c.log.Error("encode mqtt payload", zap.String("topic", topic), zap.Error(err))
 			return
 		}
 		body = encoded
@@ -155,7 +157,7 @@ func (c *Client) publish(topic string, payload any) {
 	token := c.client.Publish(topic, 0, true, body)
 	go func() {
 		if token.Wait(); token.Error() != nil {
-			log.Printf("mqtt publish failed for %s: %v", topic, token.Error())
+			c.log.Warn("mqtt publish failed", zap.String("topic", topic), zap.Error(token.Error()))
 		}
 	}()
 }

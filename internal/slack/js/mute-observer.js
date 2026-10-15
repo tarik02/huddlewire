@@ -21,12 +21,7 @@
       return;
     }
     lastMuted = muted;
-    // CDP bindings accept a single string argument.
-    try {
-      globalThis.__huddlewireReportMuteState(JSON.stringify(muted));
-    } catch {
-      // The binding is missing until the daemon installs it.
-    }
+    Promise.resolve(globalThis.__huddlewireReportMuteState?.(muted)).catch(() => undefined);
   };
 
   const observer = new MutationObserver(report);

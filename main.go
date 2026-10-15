@@ -18,6 +18,8 @@ import (
 	"github.com/tarik02/huddlewire/internal/daemon"
 	"github.com/tarik02/huddlewire/internal/shortcut"
 	"github.com/tarik02/huddlewire/internal/slack"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 // errNotApplied makes mute exit with code 2 when Slack has nothing to mute.
@@ -27,7 +29,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	err := rootCommand().ExecuteContext(ctx)
+	log, err := newLogger()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	defer func() { _ = log.Sync() }()
+
+	err = rootCommand(log).ExecuteContext(ctx)
 	switch {
 	case err == nil:
 	case errors.Is(err, errNotApplied):
@@ -38,7 +47,18 @@ func main() {
 	}
 }
 
-func rootCommand() *cobra.Command {
+// newLogger logs readable lines to stderr, which systemd and launchd collect.
+func newLogger() (*zap.Logger, error) {
+	cfg := zap.NewProductionConfig()
+	cfg.Encoding = "console"
+	cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	cfg.DisableStacktrace = true
+	cfg.DisableCaller = true
+	cfg.Sampling = nil
+	return cfg.Build()
+}
+
+func rootCommand(log *zap.Logger) *cobra.Command {
 	root := &cobra.Command{
 		Use:           "huddlewire",
 		Short:         "Control Slack Huddles through Slack's DevTools endpoint",
@@ -47,11 +67,11 @@ func rootCommand() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 	}
-	root.AddCommand(daemonCommand(), muteCommand(), statusCommand())
+	root.AddCommand(daemonCommand(log), muteCommand(log), statusCommand(log))
 	return root
 }
 
-func daemonCommand() *cobra.Command {
+func daemonCommand(log *zap.Logger) *cobra.Command {
 	return &cobra.Command{
 		Use:   "daemon",
 		Short: "Publish huddle state to MQTT and toggle mute on the global shortcut",
@@ -64,13 +84,13 @@ func daemonCommand() *cobra.Command {
 			}
 			// The shortcut needs the main thread on macOS, which cobra runs on.
 			return shortcut.RunOnMainThread(func() error {
-				return daemon.Run(cmd.Context(), cfg)
+				return daemon.Run(cmd.Context(), log, cfg)
 			})
 		},
 	}
 }
 
-func muteCommand() *cobra.Command {
+func muteCommand(log *zap.Logger) *cobra.Command {
 	modes := map[string]slack.MuteMode{
 		"toggle": slack.MuteToggle,
 		"on":     slack.MuteOn,
@@ -86,7 +106,7 @@ func muteCommand() *cobra.Command {
 			if len(args) == 1 {
 				mode = modes[args[0]]
 			}
-			return withSlack(cmd.Context(), func(ctx context.Context, browser *slack.Browser) error {
+			return withSlack(cmd.Context(), log, func(ctx context.Context, browser *slack.Browser) error {
 				action, err := slack.SetMuted(ctx, browser, mode)
 				if err != nil {
 					return err
@@ -101,14 +121,14 @@ func muteCommand() *cobra.Command {
 	}
 }
 
-func statusCommand() *cobra.Command {
+func statusCommand(log *zap.Logger) *cobra.Command {
 	var asJSON bool
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Print the huddle state",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return withSlack(cmd.Context(), func(ctx context.Context, browser *slack.Browser) error {
+			return withSlack(cmd.Context(), log, func(ctx context.Context, browser *slack.Browser) error {
 				status, err := slack.ReadStatus(ctx, browser)
 				if err != nil {
 					return err
@@ -125,7 +145,7 @@ func statusCommand() *cobra.Command {
 	return cmd
 }
 
-func withSlack(ctx context.Context, run func(context.Context, *slack.Browser) error) error {
+func withSlack(ctx context.Context, log *zap.Logger, run func(context.Context, *slack.Browser) error) error {
 	cfg, err := config.ReadSlack()
 	if err != nil {
 		return err
@@ -134,7 +154,7 @@ func withSlack(ctx context.Context, run func(context.Context, *slack.Browser) er
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	browser, err := slack.Connect(ctx, cfg.SlackCDPURL)
+	browser, err := slack.Connect(log, cfg.SlackCDPURL)
 	if err != nil {
 		return err
 	}

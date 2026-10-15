@@ -4,10 +4,10 @@ package shortcut
 import (
 	"context"
 	"fmt"
-	"log"
 	"slices"
 
 	"github.com/godbus/dbus/v5"
+	"go.uber.org/zap"
 )
 
 // RunOnMainThread runs f. Linux shortcuts have no main-thread requirement.
@@ -28,12 +28,12 @@ const (
 
 // Register binds F24 through KDE's KGlobalAccel and calls toggle when it is
 // pressed.
-func Register(ctx context.Context, toggle func()) error {
+func Register(ctx context.Context, log *zap.Logger, toggle func()) error {
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
 		return err
 	}
-	if err := register(ctx, conn, toggle); err != nil {
+	if err := register(ctx, log, conn, toggle); err != nil {
 		conn.Close()
 		return err
 	}
@@ -44,7 +44,7 @@ func Register(ctx context.Context, toggle func()) error {
 	return nil
 }
 
-func register(ctx context.Context, conn *dbus.Conn, toggle func()) error {
+func register(ctx context.Context, log *zap.Logger, conn *dbus.Conn, toggle func()) error {
 	accel := conn.Object(kglobalaccel, "/kglobalaccel")
 	actionID := []string{componentUnique, shortcutUnique, "Huddlewire", "Toggle Slack Huddle mute"}
 
@@ -54,7 +54,7 @@ func register(ctx context.Context, conn *dbus.Conn, toggle func()) error {
 		return err
 	}
 	if removedLegacy {
-		log.Print("removed legacy desktop-launcher mute shortcut")
+		log.Info("removed legacy desktop-launcher mute shortcut")
 	}
 
 	if err := accel.CallWithContext(ctx, kglobalaccelIface+".doRegister", 0, actionID).Err; err != nil {
@@ -97,6 +97,6 @@ func register(ctx context.Context, conn *dbus.Conn, toggle func()) error {
 		}
 	}()
 
-	log.Print("global mute shortcut registered: F24")
+	log.Info("global mute shortcut registered", zap.String("key", "F24"))
 	return nil
 }

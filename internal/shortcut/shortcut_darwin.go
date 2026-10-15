@@ -4,9 +4,9 @@ package shortcut
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 
+	"go.uber.org/zap"
 	"golang.design/x/hotkey"
 	"golang.design/x/hotkey/mainthread"
 )
@@ -30,19 +30,19 @@ const keyF20 hotkey.Key = 0x5A
 // Register calls toggle whenever F20 is pressed. It uses a Carbon hotkey, which
 // needs no Accessibility permission. hotkey v0.6 switched to an event tap that
 // does, and macOS would ask again whenever the Nix store path changes.
-func Register(ctx context.Context, toggle func()) error {
+func Register(ctx context.Context, log *zap.Logger, toggle func()) error {
 	key := hotkey.New(nil, keyF20)
 	if err := key.Register(); err != nil {
 		return err
 	}
-	log.Print("global mute shortcut registered: F20")
+	log.Info("global mute shortcut registered", zap.String("key", "F20"))
 
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				if err := key.Unregister(); err != nil {
-					log.Printf("unregister global mute shortcut: %v", err)
+					log.Warn("unregister global mute shortcut", zap.Error(err))
 				}
 				return
 			case <-key.Keydown():

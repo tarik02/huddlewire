@@ -5,7 +5,6 @@ package daemon
 import (
 	"context"
 	"encoding/json"
-	"log"
 	"time"
 
 	"github.com/tarik02/huddlewire/internal/config"
@@ -13,6 +12,8 @@ import (
 	"github.com/tarik02/huddlewire/internal/shortcut"
 	"github.com/tarik02/huddlewire/internal/slack"
 	"github.com/tarik02/huddlewire/internal/sound"
+
+	"go.uber.org/zap"
 )
 
 // commandTimeout bounds a single Slack operation, so a hung DevTools
@@ -27,6 +28,7 @@ type command struct {
 // daemon owns the Slack connection. Only Run's goroutine touches it; commands
 // and observer events reach it through channels.
 type daemon struct {
+	log     *zap.Logger
 	cfg     config.Config
 	mqtt    *homeassistant.Client
 	sounds  *sound.Player
@@ -42,8 +44,9 @@ type daemon struct {
 }
 
 // Run polls Slack until ctx is cancelled.
-func Run(ctx context.Context, cfg config.Config) error {
+func Run(ctx context.Context, log *zap.Logger, cfg config.Config) error {
 	d := &daemon{
+		log:              log,
 		cfg:              cfg,
 		commands:         make(chan command, 16),
 		muteEvents:       make(chan bool, 16),
@@ -58,7 +61,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 		d.sounds = sounds
 	}
 
-	d.mqtt = homeassistant.Connect(cfg, homeassistant.Handlers{
+	d.mqtt = homeassistant.Connect(log, cfg, homeassistant.Handlers{
 		OnMute: func(muted bool) {
 			mode := slack.MuteOff
 			if muted {
@@ -76,13 +79,13 @@ func Run(ctx context.Context, cfg config.Config) error {
 	})
 	defer d.mqtt.Close()
 
-	err := shortcut.Register(ctx, func() {
+	err := shortcut.Register(ctx, log, func() {
 		d.enqueue(ctx, "global mute shortcut action", func(ctx context.Context, browser *slack.Browser) (string, error) {
 			return slack.SetMuted(ctx, browser, slack.MuteToggle)
 		})
 	})
 	if err != nil {
-		log.Printf("global mute shortcut registration failed: %v", err)
+		log.Warn("global mute shortcut registration failed", zap.Error(err))
 	}
 
 	defer func() {
@@ -115,9 +118,9 @@ func (d *daemon) enqueue(ctx context.Context, name string, run func(context.Cont
 	}
 }
 
-func (d *daemon) connect(ctx context.Context) (*slack.Browser, error) {
+func (d *daemon) connect() (*slack.Browser, error) {
 	if d.browser == nil {
-		browser, err := slack.Connect(ctx, d.cfg.SlackCDPURL)
+		browser, err := slack.Connect(d.log, d.cfg.SlackCDPURL)
 		if err != nil {
 			return nil, err
 		}
@@ -137,16 +140,16 @@ func (d *daemon) execute(ctx context.Context, cmd command) {
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
 
-	browser, err := d.connect(ctx)
+	browser, err := d.connect()
 	if err == nil {
 		var action string
 		action, err = cmd.run(ctx, browser)
 		if err == nil {
-			log.Printf("%s: %s", cmd.name, action)
+			d.log.Info(cmd.name, zap.String("action", action))
 			return
 		}
 	}
-	log.Printf("%s failed: %v", cmd.name, err)
+	d.log.Warn(cmd.name+" failed", zap.Error(err))
 }
 
 // updateMuted plays a feedback sound when the microphone state changes within
@@ -166,7 +169,7 @@ func (d *daemon) poll(ctx context.Context) {
 	if err != nil {
 		d.disconnect()
 		if message := err.Error(); message != d.lastPollError {
-			log.Printf("slack cdp read failed: %v", err)
+			d.log.Warn("slack cdp read failed", zap.Error(err))
 			d.lastPollError = message
 		}
 		d.publish(slack.OfflineStatus())
@@ -180,12 +183,12 @@ func (d *daemon) poll(ctx context.Context) {
 		d.lastMuted = nil
 	}
 	if d.publish(status) {
-		log.Printf("slack huddle state: %s", status.HuddleState)
+		d.log.Info("slack huddle state", zap.String("state", string(status.HuddleState)))
 	}
 }
 
 func (d *daemon) readSlack(ctx context.Context) (slack.Status, error) {
-	browser, err := d.connect(ctx)
+	browser, err := d.connect()
 	if err != nil {
 		return slack.Status{}, err
 	}
@@ -209,7 +212,7 @@ func (d *daemon) readSlack(ctx context.Context) (slack.Status, error) {
 		for _, result := range results {
 			if d.screenSharePatch[result.Page] != result.Status {
 				d.screenSharePatch[result.Page] = result.Status
-				log.Printf("slack native screen-share patch: %s (%s)", result.Status, result.Page)
+				d.log.Info("slack native screen-share patch", zap.String("status", result.Status), zap.String("page", result.Page))
 			}
 		}
 	}
@@ -222,7 +225,7 @@ func (d *daemon) readSlack(ctx context.Context) (slack.Status, error) {
 func (d *daemon) publish(status slack.Status) bool {
 	encoded, err := json.Marshal(status)
 	if err != nil {
-		log.Printf("encode slack status: %v", err)
+		d.log.Error("encode slack status", zap.Error(err))
 		return false
 	}
 	if key := string(encoded); key != d.lastStatusKey {
