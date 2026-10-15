@@ -50,8 +50,8 @@ func Run(ctx context.Context, cfg config.Config) error {
 		screenSharePatch: map[string]string{},
 	}
 
-	if cfg.Sounds != nil {
-		sounds, err := sound.Load(cfg.Sounds.MutedPath, cfg.Sounds.UnmutedPath)
+	if cfg.MutedSound != "" {
+		sounds, err := sound.Load(cfg.MutedSound, cfg.UnmutedSound)
 		if err != nil {
 			return err
 		}
@@ -103,7 +103,7 @@ func Run(ctx context.Context, cfg config.Config) error {
 			d.updateMuted(muted)
 		case <-poll.C:
 			d.poll(ctx)
-			poll.Reset(cfg.PollInterval)
+			poll.Reset(time.Duration(cfg.PollIntervalMs) * time.Millisecond)
 		}
 	}
 }

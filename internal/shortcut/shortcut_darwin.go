@@ -3,16 +3,25 @@ package shortcut
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"os"
 
 	"golang.design/x/hotkey"
 	"golang.design/x/hotkey/mainthread"
 )
 
 // RunOnMainThread runs f while the main thread serves the Cocoa event loop that
-// delivers hotkey events. It does not return.
-func RunOnMainThread(f func()) {
-	mainthread.Init(f)
+// delivers hotkey events. The event loop never returns, so this exits the
+// process when f does, printing its error.
+func RunOnMainThread(f func() error) error {
+	mainthread.Init(func() {
+		if err := f(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	})
+	return nil
 }
 
 // kVK_F20, the highest function key macOS knows. hotkey only defines up to F19.

@@ -20,7 +20,7 @@ buildGoModule (finalAttrs: {
     ];
   };
 
-  vendorHash = "sha256-9FNgXUbAWb82NcHDvz7ZfnmwDA66vq73scxmcxw2SUw=";
+  vendorHash = "sha256-cod1b6ffUm9SEKOVVy56+qd4s2bv+vh5PEzSL7PUS58=";
 
   # Linux plays sounds through ALSA; macOS uses system frameworks.
   nativeBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [ pkg-config ];

@@ -11,8 +11,8 @@ import (
 )
 
 // RunOnMainThread runs f. Linux shortcuts have no main-thread requirement.
-func RunOnMainThread(f func()) {
-	f()
+func RunOnMainThread(f func() error) error {
+	return f()
 }
 
 const (
