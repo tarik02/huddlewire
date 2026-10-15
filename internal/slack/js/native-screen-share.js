@@ -1,6 +1,4 @@
-import type { Browser, Page } from 'puppeteer-core';
-
-const nativeScreenSharePatchScript = `(() => {
+(() => {
   const patchKey = '__slackWaylandNativeScreenSharePatch';
   const patchVersion = 8;
   const previousPatch = globalThis[patchKey];
@@ -50,7 +48,7 @@ const nativeScreenSharePatchScript = `(() => {
     lastStatus: 'installed',
   };
 
-  const normalize = (value) => value?.replace(/\\s+/g, ' ').trim().toLowerCase() || '';
+  const normalize = (value) => value?.replace(/\s+/g, ' ').trim().toLowerCase() || '';
   const isScreenShareControl = (control) => {
     if (control.matches(knownSelector)) {
       return true;
@@ -191,36 +189,4 @@ const nativeScreenSharePatchScript = `(() => {
   patchState.onClick = onClick;
   globalThis[patchKey] = patchState;
   return 'installed';
-})()`;
-
-export default async function patchNativeScreenShare(browser: Browser) {
-  const pages = await browser.pages();
-  const slackPages: Array<{ page: Page; diagnosticUrl: string }> = [];
-  for (const [pageIndex, page] of pages.entries()) {
-    if (page.url().startsWith('https://app.slack.com/client/')) {
-      slackPages.push({ diagnosticUrl: `${page.url()} [page ${pageIndex}]`, page });
-    } else if (page.url() === 'about:blank') {
-      slackPages.push({ diagnosticUrl: `about:blank [page ${pageIndex}]`, page });
-    }
-  }
-
-  return Promise.all(
-    slackPages.map(async ({ page, diagnosticUrl }) => {
-      try {
-        return {
-          status: String(await page.evaluate(nativeScreenSharePatchScript)),
-          url: diagnosticUrl,
-        };
-      } catch (error) {
-        let message = String(error);
-        if (error instanceof Error) {
-          message = error.message;
-        }
-        return {
-          status: `error: ${message}`,
-          url: diagnosticUrl,
-        };
-      }
-    }),
-  );
-}
+})()

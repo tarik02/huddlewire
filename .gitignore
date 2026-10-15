@@ -1,6 +1,4 @@
-node_modules/
-dist/
+/huddlewire
 result
 .env
 .direnv/
-*.tsbuildinfo

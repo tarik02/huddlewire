@@ -1,62 +1,36 @@
 {
-  fetchPnpmDeps,
+  alsa-lib,
+  buildGoModule,
   lib,
-  makeWrapper,
-  nodejs_24,
-  pnpm_10,
-  pnpmConfigHook,
+  pkg-config,
   stdenv,
 }:
 
-let
-  nodejs = nodejs_24;
-  pnpm = pnpm_10;
-in
-stdenv.mkDerivation (finalAttrs: {
+buildGoModule (finalAttrs: {
   pname = "huddlewire";
-  version = (builtins.fromJSON (builtins.readFile ./package.json)).version;
+  version = "0.2.0";
+
   src = lib.fileset.toSource {
     root = ./.;
     fileset = lib.fileset.unions [
-      ./package.json
-      ./pnpm-lock.yaml
-      ./src
-      ./tsconfig.json
+      ./go.mod
+      ./go.sum
+      ./main.go
+      ./internal
     ];
   };
-  strictDeps = true;
 
-  pnpmDeps = fetchPnpmDeps {
-    inherit (finalAttrs) pname version src;
-    inherit pnpm;
-    fetcherVersion = 4;
-    hash = "sha256-vbU+qpLne/MW41lpZokZrWT2WeGQE6PsBr+xe0EhniA=";
-  };
+  vendorHash = "sha256-SAq2Gc6/QFN2q5XJNLsLQmsIrpkgxyLQNhpX2pY/JoQ=";
 
-  nativeBuildInputs = [
-    makeWrapper
-    nodejs
-    pnpm
-    pnpmConfigHook
+  # Linux plays sounds through ALSA; macOS uses system frameworks.
+  nativeBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [ pkg-config ];
+  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [ alsa-lib ];
+
+  ldflags = [
+    "-s"
+    "-w"
+    "-X github.com/tarik02/huddlewire/internal/config.Version=${finalAttrs.version}"
   ];
-
-  dontBuild = true;
-
-  installPhase = ''
-    runHook preInstall
-
-    app="$out/libexec/huddlewire"
-    mkdir -p "$app" "$out/bin"
-    cp package.json pnpm-lock.yaml "$app"
-    cp -r src "$app"
-    pnpm --dir "$app" install --prod --offline --frozen-lockfile
-    rm "$app/pnpm-lock.yaml"
-
-    makeWrapper ${lib.getExe nodejs} "$out/bin/huddlewire" \
-      --add-flags "$app/src/cli.ts"
-
-    runHook postInstall
-  '';
 
   doInstallCheck = true;
   installCheckPhase = ''
@@ -69,6 +43,6 @@ stdenv.mkDerivation (finalAttrs: {
     description = "Desktop control plane for Slack Huddles";
     license = lib.licenses.mit;
     mainProgram = "huddlewire";
-    platforms = lib.platforms.linux;
+    platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };
 })
