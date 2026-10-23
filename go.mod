@@ -13,6 +13,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	go.uber.org/zap v1.28.0
 	golang.design/x/hotkey v0.5.0
+	golang.org/x/sys v0.47.0
 )
 
 require (
@@ -26,5 +27,4 @@ require (
 	golang.design/x/mainthread v0.3.0 // indirect
 	golang.org/x/net v0.44.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 )

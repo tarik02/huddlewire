@@ -11,6 +11,7 @@ import (
 	"github.com/tarik02/huddlewire/internal/homeassistant"
 	"github.com/tarik02/huddlewire/internal/shortcut"
 	"github.com/tarik02/huddlewire/internal/slack"
+	"github.com/tarik02/huddlewire/internal/slackapp"
 	"github.com/tarik02/huddlewire/internal/sound"
 
 	"go.uber.org/zap"
@@ -86,6 +87,16 @@ func Run(ctx context.Context, log *zap.Logger, cfg config.Config) error {
 	})
 	if err != nil {
 		log.Warn("global mute shortcut registration failed", zap.Error(err))
+	}
+
+	if cfg.SlackRelaunch {
+		err := slackapp.Watch(ctx, log, slackapp.Options{
+			CDPURL:  cfg.SlackCDPURL,
+			NewOnly: cfg.SlackRelaunchNewOnly,
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	defer func() {

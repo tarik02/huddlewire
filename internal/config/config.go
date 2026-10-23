@@ -34,6 +34,9 @@ type Config struct {
 	PollIntervalMs         int  `env:"POLL_INTERVAL_MS" envDefault:"1000"`
 	PatchNativeScreenShare bool `env:"PATCH_NATIVE_SCREEN_SHARE"`
 
+	SlackRelaunch        bool `env:"SLACK_RELAUNCH"`
+	SlackRelaunchNewOnly bool `env:"SLACK_RELAUNCH_NEW_ONLY" envDefault:"true"`
+
 	MutedSound   string `env:"HUDDLEWIRE_MUTED_SOUND"`
 	UnmutedSound string `env:"HUDDLEWIRE_UNMUTED_SOUND"`
 }
@@ -49,6 +52,7 @@ func Read() (Config, error) {
 		// The patch replaces Slack's screen-source picker, which only fails on
 		// Wayland. env keeps this value when the variable is unset.
 		PatchNativeScreenShare: runtime.GOOS == "linux",
+		SlackRelaunch:          runtime.GOOS == "darwin",
 	}
 	if err := env.Parse(&cfg); err != nil {
 		return Config{}, err
