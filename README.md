@@ -62,6 +62,13 @@ It reads the following environment variables:
 - `HA_DEVICE_NAME` (defaults to `Slack huddle`)
 - `PATCH_NATIVE_SCREEN_SHARE` (defaults to `true` on Linux and `false` on macOS)
 - `POLL_INTERVAL_MS` (defaults to `1000`)
+- `SLACK_RELAUNCH` (macOS only, defaults to `true`): relaunch Slack with the
+  DevTools flags from `SLACK_CDP_URL` when it runs without them, as it does
+  after it is opened from the Dock or updates itself. A Slack that is not
+  running is left alone.
+- `SLACK_RELAUNCH_NEW_ONLY` (defaults to `true`): relaunch only a Slack started
+  within the last minute, so a joined huddle is never dropped. An older Slack
+  gets a notification asking to restart it.
 - `HUDDLEWIRE_MUTED_SOUND`, `HUDDLEWIRE_UNMUTED_SOUND` (optional MP3 files
   played when the microphone is muted or unmuted; set both or neither)
 
@@ -87,7 +94,8 @@ service on Linux and a launchd agent on macOS:
 }
 ```
 
-The module does not start Slack; launch it with the DevTools flags above.
+The module does not start Slack; launch it with the DevTools flags above. On
+macOS the daemon relaunches a Slack started without them (`SLACK_RELAUNCH`).
 
 ## Without Nix
 
