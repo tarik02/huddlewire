@@ -83,7 +83,7 @@ func Watch(ctx context.Context, log *zap.Logger, opts Options) error {
 
 			age := time.Since(slack.started)
 			if opts.NewOnly && age > newAge {
-				log.Warn("slack runs without devtools; restart it to connect", zap.Int("pid", slack.pid), zap.Duration("age", age.Round(time.Second)))
+				log.Warn("slack runs without devtools; restart it to connect", zap.Int("pid", slack.pid), zap.Stringer("age", age.Round(time.Second)))
 				notify("Slack runs without DevTools. Restart Slack to connect huddlewire.")
 				continue
 			}
