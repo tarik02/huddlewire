@@ -3,6 +3,8 @@ package config
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"runtime"
 
 	"github.com/caarlos0/env/v11"
@@ -34,8 +36,9 @@ type Config struct {
 	PollIntervalMs         int  `env:"POLL_INTERVAL_MS" envDefault:"1000"`
 	PatchNativeScreenShare bool `env:"PATCH_NATIVE_SCREEN_SHARE"`
 
-	SlackRelaunch        bool `env:"SLACK_RELAUNCH"`
-	SlackRelaunchNewOnly bool `env:"SLACK_RELAUNCH_NEW_ONLY" envDefault:"true"`
+	SlackRelaunch        bool   `env:"SLACK_RELAUNCH"`
+	SlackRelaunchNewOnly bool   `env:"SLACK_RELAUNCH_NEW_ONLY" envDefault:"true"`
+	SlackUserDataDir     string `env:"SLACK_USER_DATA_DIR"`
 
 	MutedSound   string `env:"HUDDLEWIRE_MUTED_SOUND"`
 	UnmutedSound string `env:"HUDDLEWIRE_UNMUTED_SOUND"`
@@ -53,6 +56,11 @@ func Read() (Config, error) {
 		// Wayland. env keeps this value when the variable is unset.
 		PatchNativeScreenShare: runtime.GOOS == "linux",
 		SlackRelaunch:          runtime.GOOS == "darwin",
+	}
+	// Slack refuses DevTools on its default profile, so the relaunched Slack
+	// opens a profile of its own.
+	if dir, err := os.UserConfigDir(); err == nil {
+		cfg.SlackUserDataDir = filepath.Join(dir, AppName, "Slack")
 	}
 	if err := env.Parse(&cfg); err != nil {
 		return Config{}, err

@@ -91,8 +91,9 @@ func Run(ctx context.Context, log *zap.Logger, cfg config.Config) error {
 
 	if cfg.SlackRelaunch {
 		err := slackapp.Watch(ctx, log, slackapp.Options{
-			CDPURL:  cfg.SlackCDPURL,
-			NewOnly: cfg.SlackRelaunchNewOnly,
+			CDPURL:      cfg.SlackCDPURL,
+			NewOnly:     cfg.SlackRelaunchNewOnly,
+			UserDataDir: cfg.SlackUserDataDir,
 		})
 		if err != nil {
 			return err
