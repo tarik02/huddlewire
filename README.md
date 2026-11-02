@@ -23,7 +23,19 @@ slack --remote-debugging-address=127.0.0.1 --remote-debugging-port=9224
 On macOS:
 
 ```console
-open -a Slack --args --remote-debugging-address=127.0.0.1 --remote-debugging-port=9224
+open -a Slack --args \
+  --user-data-dir="$HOME/Library/Application Support/huddlewire/Slack" \
+  --remote-debugging-address=127.0.0.1 --remote-debugging-port=9224
+```
+
+Slack 4.53 and later refuse to open the DevTools endpoint on their default
+profile, so on macOS Slack runs from a profile of its own. To keep the current
+sign-in, copy the default profile there once while Slack is quit:
+
+```console
+rsync -a --exclude 'Singleton*' --exclude 'Cache/' --exclude 'Code Cache/' \
+  "$HOME/Library/Application Support/Slack/" \
+  "$HOME/Library/Application Support/huddlewire/Slack/"
 ```
 
 The DevTools endpoint can control the signed-in Slack session. Keep it bound to
@@ -66,6 +78,9 @@ It reads the following environment variables:
   DevTools flags from `SLACK_CDP_URL` when it runs without them, as it does
   after it is opened from the Dock or updates itself. A Slack that is not
   running is left alone.
+- `SLACK_USER_DATA_DIR` (defaults to
+  `~/Library/Application Support/huddlewire/Slack` on macOS): the Slack profile
+  a relaunched Slack opens
 - `SLACK_RELAUNCH_NEW_ONLY` (defaults to `true`): relaunch only a Slack started
   within the last minute, so a joined huddle is never dropped. An older Slack
   gets a notification asking to restart it.
