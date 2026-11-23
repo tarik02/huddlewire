@@ -1,6 +1,6 @@
 (() => {
   const patchKey = '__slackWaylandNativeScreenSharePatch';
-  const patchVersion = 8;
+  const patchVersion = 9;
   const previousPatch = globalThis[patchKey];
   if (previousPatch?.installed && previousPatch.version === patchVersion) {
     return previousPatch.lastStatus || 'already_installed';
@@ -8,17 +8,24 @@
   if (previousPatch?.onClick) {
     document.removeEventListener('click', previousPatch.onClick, true);
   }
-  const rspackHost = Array.isArray(globalThis.rspackChunkwebapp)
-    ? globalThis
-    : window.opener && Array.isArray(window.opener.rspackChunkwebapp)
-      ? window.opener
-      : null;
+  // Slack renamed its chunk array from rspackChunkwebapp in the Gantry v2
+  // client.
+  const chunkNames = ['rspackChunkGantryV2', 'rspackChunkwebapp'];
+  let rspackHost = null;
+  let chunkName = null;
+  for (const host of [globalThis, window.opener]) {
+    chunkName = host && chunkNames.find((name) => Array.isArray(host[name]));
+    if (chunkName) {
+      rspackHost = host;
+      break;
+    }
+  }
   if (!rspackHost) {
     return 'rspack_unavailable';
   }
 
   let rspackRequire = null;
-  rspackHost.rspackChunkwebapp.push([
+  rspackHost[chunkName].push([
     ['slack-wayland-native-screen-share-' + Date.now() + '-' + Math.random().toString(36).slice(2)],
     {},
     (runtimeRequire) => {
@@ -93,8 +100,10 @@
         return [];
       }
     }).filter((value) => typeof value === 'function');
-    const actionWithDescription = (description) => exportedFunctions.find(
-      (value) => value.meta?.description === description,
+    // Older clients describe actions in meta.description, the Gantry v2
+    // client names them in meta.name.
+    const findAction = (name, description) => exportedFunctions.find(
+      (value) => value.meta?.name === name || value.meta?.description === description,
     );
     const teamStoreModule = Object.values(rspackRequire.c)
       .map((module) => module?.exports)
@@ -115,11 +124,12 @@
       : rspackHost.location.pathname;
     const teamId = teamPath.split('/')[2];
 
-    startScreenShare = actionWithDescription(
+    startScreenShare = findAction(
+      'startScreenShare',
       'Start screen share for current user with given mediaSourceId',
     ) || null;
-    stopScreenShare = actionWithDescription('Stop screen share for current user') || null;
-    updatePeer = actionWithDescription('Update a peer') || null;
+    stopScreenShare = findAction('stopScreenShare', 'Stop screen share for current user') || null;
+    updatePeer = findAction('updatePeer', 'Update a peer') || null;
     clientDispatch = clientStoreModule?.dispatchForClientStore ?? null;
     store = teamId ? teamStoreModule?.oK?.(teamId) ?? null : null;
     return Boolean(
