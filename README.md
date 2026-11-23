@@ -75,6 +75,8 @@ It reads the following environment variables:
 - `PATCH_NATIVE_SCREEN_SHARE` (defaults to `true` on Linux and `false` on macOS)
 - `CONFIRM_STILL_HERE` (defaults to `true`): hide and answer Slack's "Are you
   still there?" prompt, so a huddle you are alone in is not left automatically
+- `PREVENT_VIDEO_AUTO_MUTE` (defaults to `true`): keep the microphone on when
+  a video plays in the huddle, instead of Slack muting it until the video ends
 - `POLL_INTERVAL_MS` (defaults to `1000`)
 - `SLACK_RELAUNCH` (macOS only, defaults to `true`): relaunch Slack with the
   DevTools flags from `SLACK_CDP_URL` when it runs without them, as it does

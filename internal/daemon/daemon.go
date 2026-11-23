@@ -239,6 +239,16 @@ func (d *daemon) readSlack(ctx context.Context) (slack.Status, error) {
 		}
 	}
 
+	if d.cfg.PreventVideoAutoMute {
+		patched, err := slack.PreventVideoAutoMute(ctx, browser)
+		if err != nil {
+			return slack.Status{}, err
+		}
+		if patched > 0 {
+			d.log.Info("slack video auto-mute patch", zap.Int("stores", patched))
+		}
+	}
+
 	return slack.ReadStatus(ctx, browser)
 }
 
