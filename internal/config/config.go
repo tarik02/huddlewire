@@ -33,6 +33,7 @@ type Config struct {
 
 	PollIntervalMs         int  `env:"POLL_INTERVAL_MS" envDefault:"1000"`
 	PatchNativeScreenShare bool `env:"PATCH_NATIVE_SCREEN_SHARE"`
+	PreventVideoAutoMute   bool `env:"PREVENT_VIDEO_AUTO_MUTE" envDefault:"true"`
 
 	SlackRelaunch        bool `env:"SLACK_RELAUNCH"`
 	SlackRelaunchNewOnly bool `env:"SLACK_RELAUNCH_NEW_ONLY" envDefault:"true"`

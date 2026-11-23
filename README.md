@@ -61,6 +61,8 @@ It reads the following environment variables:
 - `HA_DEVICE_ID` (defaults to `huddlewire`)
 - `HA_DEVICE_NAME` (defaults to `Slack huddle`)
 - `PATCH_NATIVE_SCREEN_SHARE` (defaults to `true` on Linux and `false` on macOS)
+- `PREVENT_VIDEO_AUTO_MUTE` (defaults to `true`): keep the microphone on when
+  a video plays in the huddle, instead of Slack muting it until the video ends
 - `POLL_INTERVAL_MS` (defaults to `1000`)
 - `SLACK_RELAUNCH` (macOS only, defaults to `true`): relaunch Slack with the
   DevTools flags from `SLACK_CDP_URL` when it runs without them, as it does
