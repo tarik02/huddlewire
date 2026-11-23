@@ -91,8 +91,9 @@ func Run(ctx context.Context, log *zap.Logger, cfg config.Config) error {
 
 	if cfg.SlackRelaunch {
 		err := slackapp.Watch(ctx, log, slackapp.Options{
-			CDPURL:  cfg.SlackCDPURL,
-			NewOnly: cfg.SlackRelaunchNewOnly,
+			CDPURL:      cfg.SlackCDPURL,
+			NewOnly:     cfg.SlackRelaunchNewOnly,
+			UserDataDir: cfg.SlackUserDataDir,
 		})
 		if err != nil {
 			return err
@@ -225,6 +226,16 @@ func (d *daemon) readSlack(ctx context.Context) (slack.Status, error) {
 				d.screenSharePatch[result.Page] = result.Status
 				d.log.Info("slack native screen-share patch", zap.String("status", result.Status), zap.String("page", result.Page))
 			}
+		}
+	}
+
+	if d.cfg.ConfirmStillHere {
+		confirmed, err := slack.ConfirmStillHere(ctx, browser)
+		if err != nil {
+			return slack.Status{}, err
+		}
+		if confirmed > 0 {
+			d.log.Info("confirmed slack huddle still-here prompt", zap.Int("count", confirmed))
 		}
 	}
 

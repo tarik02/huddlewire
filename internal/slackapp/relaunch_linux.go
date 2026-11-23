@@ -10,8 +10,9 @@ import (
 
 // Options configures Watch.
 type Options struct {
-	CDPURL  string
-	NewOnly bool
+	CDPURL      string
+	NewOnly     bool
+	UserDataDir string
 }
 
 // Watch is only implemented on macOS.

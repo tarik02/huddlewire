@@ -21,8 +21,10 @@ const (
 	checkInterval = 2 * time.Second
 	// newAge is how long after start Slack still counts as just launched, so
 	// restarting it cannot drop a huddle the user has joined.
-	newAge     = time.Minute
-	quitWait   = 10 * time.Second
+	newAge   = time.Minute
+	quitWait = 10 * time.Second
+	// startWait bounds how long the relaunched Slack takes to appear.
+	startWait  = 20 * time.Second
 	executable = "/Contents/MacOS/Slack"
 )
 
@@ -33,6 +35,9 @@ type Options struct {
 	// NewOnly restricts relaunching to a Slack started within the last
 	// minute. An older Slack only gets a notification.
 	NewOnly bool
+	// UserDataDir is the Slack profile the relaunched Slack opens. Slack
+	// refuses to open its DevTools endpoint on its default profile.
+	UserDataDir string
 }
 
 type process struct {
@@ -53,7 +58,11 @@ func Watch(ctx context.Context, log *zap.Logger, opts Options) error {
 	if endpoint.Hostname() == "" || endpoint.Port() == "" {
 		return fmt.Errorf("SLACK_CDP_URL %q needs a host and a port", opts.CDPURL)
 	}
+	if opts.UserDataDir == "" {
+		return errors.New("SLACK_USER_DATA_DIR is required to relaunch Slack")
+	}
 	flags := []string{
+		"--user-data-dir=" + opts.UserDataDir,
 		"--remote-debugging-address=" + endpoint.Hostname(),
 		"--remote-debugging-port=" + endpoint.Port(),
 	}
@@ -91,6 +100,7 @@ func Watch(ctx context.Context, log *zap.Logger, opts Options) error {
 			log.Info("relaunching slack with devtools", zap.Int("pid", slack.pid))
 			if err := relaunch(ctx, slack, flags); err != nil {
 				log.Warn("relaunch slack", zap.Error(err))
+				notify("Slack could not be relaunched with DevTools. Start it again.")
 			}
 		}
 	}()
@@ -131,7 +141,27 @@ func relaunch(ctx context.Context, slack *process, flags []string) error {
 	if output, err := exec.CommandContext(ctx, "/usr/bin/open", args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("open slack: %w: %s", err, bytes.TrimSpace(output))
 	}
-	return nil
+
+	// open succeeds even when Slack exits right after launching, as it does
+	// when it rejects its command line.
+	deadline = time.Now().Add(startWait)
+	for {
+		started, err := findSlack()
+		if err != nil {
+			return err
+		}
+		if started != nil && hasDevTools(started.args) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("slack did not start with devtools within %s", startWait)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(500 * time.Millisecond):
+		}
+	}
 }
 
 func notify(message string) {
