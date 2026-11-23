@@ -229,6 +229,16 @@ func (d *daemon) readSlack(ctx context.Context) (slack.Status, error) {
 		}
 	}
 
+	if d.cfg.ConfirmStillHere {
+		confirmed, err := slack.ConfirmStillHere(ctx, browser)
+		if err != nil {
+			return slack.Status{}, err
+		}
+		if confirmed > 0 {
+			d.log.Info("confirmed slack huddle still-here prompt", zap.Int("count", confirmed))
+		}
+	}
+
 	return slack.ReadStatus(ctx, browser)
 }
 
